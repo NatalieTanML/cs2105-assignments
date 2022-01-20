@@ -1,1 +1,1 @@
-# cs2105-labs
+# cs2105-assignments
