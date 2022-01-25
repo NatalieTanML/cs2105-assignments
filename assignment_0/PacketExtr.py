@@ -16,7 +16,7 @@ def main():
 
         # Output data
         size = int(size_b)
-        data = sys.stdin.buffer.read(size)
+        data = sys.stdin.buffer.read1(size)
         sys.stdout.buffer.write(data)
         sys.stdout.buffer.flush()
         
