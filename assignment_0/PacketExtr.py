@@ -5,11 +5,7 @@ BUF_SIZE = 10000
 def process(size):
     size_read = 0
     while size_read < size:
-        remaining = size - size_read
-        if remaining > BUF_SIZE:
-            read = BUF_SIZE
-        else:
-            read = remaining
+        read = min(BUF_SIZE, size - size_read)
         bytes = sys.stdin.buffer.read1(read)
         sys.stdout.buffer.write(bytes)
         sys.stdout.buffer.flush()
