@@ -1,24 +1,39 @@
 import sys
 
+BUF_SIZE = 10000
+
+def process(size):
+    size_read = 0
+    while size_read < size:
+        remaining = size - size_read
+        if remaining > BUF_SIZE:
+            read = BUF_SIZE
+        else:
+            read = remaining
+        bytes = sys.stdin.buffer.read1(read)
+        sys.stdout.buffer.write(bytes)
+        sys.stdout.buffer.flush()
+        size_read += len(bytes)
+
 def main():
     while True:
         # Get header (ie `Size: `)
-        header_b = sys.stdin.buffer.read1(6)
-        if header_b == b'':
+        header = sys.stdin.buffer.read1(6)
+        if header == b'':
             break
+
+        # if b'Size: ' not in header_b:
+        #     break;
 
         # Get the size
         size_b = b''
-        byte = sys.stdin.buffer.read1(1)
         while byte != b'B':
-            size_b += byte
             byte = sys.stdin.buffer.read1(1)
+            size_b += byte
 
         # Output data
         size = int(size_b)
-        data = sys.stdin.buffer.read1(size)
-        sys.stdout.buffer.write(data)
-        sys.stdout.buffer.flush()
+        process(size);
         
 if __name__ == "__main__":
     main()
