@@ -3,13 +3,6 @@ import sys
 BUF_SIZE = 10000
 
 def process(size):
-    # size_read = 0
-    # while size_read < size:
-    #     bytes = sys.stdin.buffer.read1(size - size_read)
-    #     sys.stdout.buffer.write(bytes)
-    #     sys.stdout.buffer.flush()
-    #     size_read += len(bytes)
-
     size_read = 0
     while size_read < size:
         remaining = size - size_read
