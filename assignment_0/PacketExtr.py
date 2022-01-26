@@ -5,15 +5,22 @@ BUF_SIZE = 10000
 def process(size):
     size_read = 0
     while size_read < size:
-        remaining = size - size_read
-        if remaining > BUF_SIZE:
-            read = BUF_SIZE
-        else:
-            read = remaining
-        bytes = sys.stdin.buffer.read1(read)
+        bytes = sys.stdin.buffer.read1(size - size_read)
         sys.stdout.buffer.write(bytes)
         sys.stdout.buffer.flush()
         size_read += len(bytes)
+        
+    # size_read = 0
+    # while size_read < size:
+    #     remaining = size - size_read
+    #     if remaining > BUF_SIZE:
+    #         read = BUF_SIZE
+    #     else:
+    #         read = remaining
+    #     bytes = sys.stdin.buffer.read1(read)
+    #     sys.stdout.buffer.write(bytes)
+    #     sys.stdout.buffer.flush()
+    #     size_read += len(bytes)
 
 def main():
     while True:
@@ -27,6 +34,7 @@ def main():
 
         # Get the size
         size_b = b''
+        byte = b''
         while byte != b'B':
             byte = sys.stdin.buffer.read1(1)
             size_b += byte
