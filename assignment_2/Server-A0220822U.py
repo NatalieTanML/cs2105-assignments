@@ -1,6 +1,5 @@
 # 427167
 
-from math import remainder
 import sys
 import os
 import hashlib
@@ -35,14 +34,16 @@ def read_chunks(file, size=PKT_SERVER_SIZE):
 def pad_packet(data):
     pkt_len = len(data)
     remainder = -pkt_len % PKT_SERVER_SIZE
-    data += "\0" * remainder
+    if type(data) is bytes:
+        data += b"\0" * remainder
+    else:
+        data += "\0" * remainder
     return data
 
 def create_packet(data):
     # add seq and chksum
     if len(data) != PKT_SERVER_SIZE:
         data = pad_packet(data)
-
     if type(data) is bytes:
         return data
     else:
