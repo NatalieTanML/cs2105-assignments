@@ -42,47 +42,22 @@ def main():
         handshake = server_socket.recv(4)
 
     # connected
-    # print("connected client")
 
-    # count = 0
-
-    # # get len of file
-    # size_b = b''
-    # while True:
-    #     byte = server_socket.recv(1)
-    #     count += 1
-    #     if byte == b'_':
-    #         break
-    #     size_b += byte
-
-    # size = int(size_b)
-
-    # # get last packet padding
-    # padding_b = b''
-    # while True:
-    #     byte = server_socket.recv(1)
-    #     count += 1
-    #     if byte == b'_':
-    #         break
-    #     padding_b += byte
-
-    # padding = int(padding_b)
-
-    # # ignore the padding for init pkt
-    # server_socket.recv(PKT_SERVER_SIZE - count)
+    count = 0
     
     size, padding = receive_init(server_socket)
 
     no_of_packets = (size // PKT_SERVER_SIZE) + (size % PKT_SERVER_SIZE > 0)
 
     with open(ARG_DEST_FILE_NAME, "wb") as f:
-        for i in range(no_of_packets):
-            if padding > 0 and i+1 == no_of_packets:
-                # last packet with padding
-                packet = server_socket.recv(PKT_SERVER_SIZE - padding)
-                server_socket.recv(padding) # ignore padding
-            else:
-                packet = server_socket.recv(PKT_SERVER_SIZE)
+        while True:
+            packet = server_socket.recv(PKT_SERVER_SIZE)
+            count += 1
+            if not packet:
+                break
+            if count == no_of_packets and padding > 0:
+                # last packet
+                packet = packet[:-padding]
 
             f.write(packet)
 
