@@ -1,6 +1,8 @@
 # 427167
 
+from math import remainder
 import sys
+import os
 import hashlib
 from socket import *
 
@@ -8,6 +10,9 @@ from socket import *
 PORT_RELIABLE = 4445
 PORT_ERROR = 4446
 PORT_REORDERING = 4447
+
+PKT_SERVER_SIZE = 1024
+PKT_CLIENT_SIZE = 64
 
 # input args
 ARG_STUDENT_KEY = sys.argv[1]       # 427167
@@ -18,21 +23,65 @@ ARG_INPUT_FILE_NAME = sys.argv[5]
 
 METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_S"
 
-encodedHandshake = METHOD_HANDSHAKE.encode()
+encoded_handshake = METHOD_HANDSHAKE.encode()
+
+def read_chunks(file, size=PKT_SERVER_SIZE):
+    while True:
+        data = file.read(size)
+        if not data:
+            break
+        yield data
+
+def pad_packet(data):
+    pkt_len = len(data)
+    remainder = -pkt_len % PKT_SERVER_SIZE
+    data += "\0" * remainder
+    return data
+
+def create_packet(data):
+    # add seq and chksum
+
+    if len(data) != PKT_SERVER_SIZE:
+        data = pad_packet(data)
+    
+    return data.encode()
+
+def init_packet():
+    # create first packet containing file size, and last packet padding len
+    size = os.path.getsize(ARG_INPUT_FILE_NAME)
+    padding_size = -size % PKT_SERVER_SIZE
+    payload = str(size) + '_' + str(padding_size) + '_'
+    packet = create_packet(payload)
+    return packet
 
 def main():
-    clientSocket = socket(AF_INET, SOCK_STREAM)
-    clientSocket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
+    init = init_packet()
+
+    client_socket = socket(AF_INET, SOCK_STREAM)
+    client_socket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
 
     # handshake
-    clientSocket.send(encodedHandshake)
-    handshake = clientSocket.recv(4)
+    client_socket.send(encoded_handshake)
+    handshake = client_socket.recv(4)
 
     while handshake != b'0_':
-        handshake = clientSocket.recv(4)
+        handshake = client_socket.recv(4)
 
     # connected
-    print("connected server")
+    # print("connected server")
+    
+    client_socket.sendall(init)
+
+    # start sending file in chunks of 1024 B (pipelined)
+    f = open(ARG_INPUT_FILE_NAME, 'rb')
+    for chunk in read_chunks(f):
+        packet = create_packet(chunk)
+        client_socket.sendall(packet)
+    f.close()
+
+    client_socket.close()
+
+    
 
 
 if __name__ == "__main__":

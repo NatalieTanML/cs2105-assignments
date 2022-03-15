@@ -9,6 +9,9 @@ PORT_RELIABLE = 4445
 PORT_ERROR = 4446
 PORT_REORDERING = 4447
 
+PKT_SERVER_SIZE = 1024
+PKT_CLIENT_SIZE = 64
+
 # input args
 ARG_STUDENT_KEY = sys.argv[1]       # 427167
 ARG_MODE = int(sys.argv[2])         # 0, 1, or 2
@@ -18,21 +21,73 @@ ARG_DEST_FILE_NAME = sys.argv[5]
 
 METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_C"
 
-encodedHandshake = METHOD_HANDSHAKE.encode()
+encoded_handshake = METHOD_HANDSHAKE.encode()
 
 def main():
-    clientSocket = socket(AF_INET, SOCK_STREAM)
-    clientSocket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
+    server_socket = socket(AF_INET, SOCK_STREAM)
+    server_socket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
 
     # handshake
-    clientSocket.send(encodedHandshake)
-    handshake = clientSocket.recv(4)
+    server_socket.send(encoded_handshake)
+    handshake = server_socket.recv(4)
 
     while handshake != b'0_':
-        handshake = clientSocket.recv(4)
+        handshake = server_socket.recv(4)
 
     # connected
-    print("connected client")
+    # print("connected client")
+
+    # count = 0
+
+    # # get len of file
+    # size_b = b''
+    # while True:
+    #     byte = server_socket.recv(1)
+    #     count += 1
+    #     if byte == b'_':
+    #         break
+    #     size_b += byte
+
+    # size = int(size_b)
+
+    # # get last packet padding
+    # padding_b = b''
+    # while True:
+    #     byte = server_socket.recv(1)
+    #     count += 1
+    #     if byte == b'_':
+    #         break
+    #     padding_b += byte
+
+    # padding = int(padding_b)
+
+    # # ignore the padding for init pkt
+    # server_socket.recv(PKT_SERVER_SIZE - count)
+
+
+    init = server_socket.recv(PKT_SERVER_SIZE).decode()
+    size, padding, _ = init.split("_")
+
+    no_of_packets = (size // PKT_SERVER_SIZE) + (size % PKT_SERVER_SIZE > 0)
+
+    with open(ARG_DEST_FILE_NAME, "wb") as f:
+        for i in range(no_of_packets):
+            if padding > 0 and i+1 == no_of_packets:
+                # last packet with padding
+                packet = server_socket.recv(PKT_SERVER_SIZE - padding)
+                server_socket.recv(padding) # ignore padding
+            else:
+                packet = server_socket.recv(PKT_SERVER_SIZE)
+
+            f.write(packet)
+
+    server_socket.close()
+
+    
+
+        
+
+
 
 
 if __name__ == "__main__":
