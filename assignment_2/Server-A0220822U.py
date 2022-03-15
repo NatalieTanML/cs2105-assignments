@@ -73,6 +73,7 @@ def handshake():
 
 def main():
     init = init_packet()
+    f = open(ARG_INPUT_FILE_NAME, "rb")
     client_socket = handshake()
 
     # connected
@@ -80,13 +81,13 @@ def main():
     client_socket.sendall(init)
 
     # start sending file in chunks of 1024 B (pipelined)
-    f = open(ARG_INPUT_FILE_NAME, 'rb')
     for chunk in read_chunks(f):
         packet = create_packet(chunk)
         client_socket.sendall(packet)
-    f.close()
 
     client_socket.close()
+    f.close()
+    
     end = time.time()
     print(end - start)
 

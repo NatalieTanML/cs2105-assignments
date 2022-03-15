@@ -46,6 +46,7 @@ def handshake():
     return server_socket
 
 def main():
+    f = open(ARG_DEST_FILE_NAME, "wb")
     server_socket = handshake()
 
     # connected
@@ -53,19 +54,19 @@ def main():
     size, padding = receive_init(server_socket)
     total_packets = count_total_packets(size)
 
-    with open(ARG_DEST_FILE_NAME, "wb") as f:
-        while True:
-            packet = server_socket.recv(PKT_SERVER_SIZE)
-            count += 1
-            if not packet:
-                break
-            if count == total_packets and padding > 0:
-                # last packet
-                packet = packet[:-padding]
+    while True:
+        packet = server_socket.recv(PKT_SERVER_SIZE)
+        count += 1
+        if not packet:
+            break
+        if count == total_packets and padding > 0:
+            # last packet
+            packet = packet[:-padding]
 
-            f.write(packet)
+        f.write(packet)
 
     server_socket.close()
+    f.close()
 
 
 if __name__ == "__main__":
