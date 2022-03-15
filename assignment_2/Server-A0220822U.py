@@ -42,7 +42,7 @@ def create_packet(data):
     # add seq and chksum
     if len(data) != PKT_SERVER_SIZE:
         data = pad_packet(data)
-    return data.encode()
+    return data
 
 def init_packet():
     # create first packet containing file size, and last packet padding len
