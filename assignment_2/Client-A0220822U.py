@@ -1,4 +1,4 @@
-# 427167
+# python3 Client-A0220822U.py 427167 0 137.132.92.111 4445 ./test/output/613_large.dat
 
 import sys
 import hashlib
@@ -20,8 +20,10 @@ ARG_PORT_NUM = int(sys.argv[4])     # 4445, 4446, or 4447
 ARG_DEST_FILE_NAME = sys.argv[5]
 
 METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_C"
-
 encoded_handshake = METHOD_HANDSHAKE.encode()
+
+def count_total_packets(size):
+    return (size // PKT_SERVER_SIZE) + (size % PKT_SERVER_SIZE > 0)
 
 def receive_init(server_socket):
     init = server_socket.recv(PKT_SERVER_SIZE).decode()
@@ -30,7 +32,7 @@ def receive_init(server_socket):
     padding = int(padding)
     return size, padding
 
-def main():
+def handshake():
     server_socket = socket(AF_INET, SOCK_STREAM)
     server_socket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
 
@@ -41,13 +43,15 @@ def main():
     while handshake != b'0_':
         handshake = server_socket.recv(4)
 
+    return server_socket
+
+def main():
+    server_socket = handshake()
+
     # connected
-
     count = 0
-    
     size, padding = receive_init(server_socket)
-
-    no_of_packets = (size // PKT_SERVER_SIZE) + (size % PKT_SERVER_SIZE > 0)
+    total_packets = count_total_packets(size)
 
     with open(ARG_DEST_FILE_NAME, "wb") as f:
         while True:
@@ -55,19 +59,13 @@ def main():
             count += 1
             if not packet:
                 break
-            if count == no_of_packets and padding > 0:
+            if count == total_packets and padding > 0:
                 # last packet
                 packet = packet[:-padding]
 
             f.write(packet)
 
     server_socket.close()
-
-    
-
-        
-
-
 
 
 if __name__ == "__main__":

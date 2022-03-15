@@ -1,7 +1,9 @@
-# 427167
+# bash test/FileTransfer.sh -i 427167 -n & bash test/FileTransfer.sh -s -i 427167 -n
+# python3 Server-A0220822U.py 427167 0 137.132.92.111 4445 ./test/input/613_large.dat
 
 import sys
 import os
+import time
 import hashlib
 from socket import *
 
@@ -21,7 +23,6 @@ ARG_PORT_NUM = int(sys.argv[4])     # 4445, 4446, or 4447
 ARG_INPUT_FILE_NAME = sys.argv[5]
 
 METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_S"
-
 encoded_handshake = METHOD_HANDSHAKE.encode()
 
 def read_chunks(file, size=PKT_SERVER_SIZE):
@@ -57,9 +58,7 @@ def init_packet():
     packet = create_packet(payload)
     return packet
 
-def main():
-    init = init_packet()
-
+def handshake():
     client_socket = socket(AF_INET, SOCK_STREAM)
     client_socket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
 
@@ -70,9 +69,14 @@ def main():
     while handshake != b'0_':
         handshake = client_socket.recv(4)
 
+    return client_socket
+
+def main():
+    init = init_packet()
+    client_socket = handshake()
+
     # connected
-    # print("connected server")
-    
+    start = time.time()
     client_socket.sendall(init)
 
     # start sending file in chunks of 1024 B (pipelined)
@@ -83,9 +87,8 @@ def main():
     f.close()
 
     client_socket.close()
-
-    
-
+    end = time.time()
+    print(end - start)
 
 if __name__ == "__main__":
     main()
