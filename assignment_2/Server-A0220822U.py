@@ -40,10 +40,8 @@ def pad_packet(data):
 
 def create_packet(data):
     # add seq and chksum
-
     if len(data) != PKT_SERVER_SIZE:
         data = pad_packet(data)
-    
     return data.encode()
 
 def init_packet():

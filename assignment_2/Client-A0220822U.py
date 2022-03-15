@@ -23,6 +23,13 @@ METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_C"
 
 encoded_handshake = METHOD_HANDSHAKE.encode()
 
+def receive_init(server_socket):
+    init = server_socket.recv(PKT_SERVER_SIZE).decode()
+    size, padding, _ = init.split("_")
+    size = int(size)
+    padding = int(padding)
+    return size, padding
+
 def main():
     server_socket = socket(AF_INET, SOCK_STREAM)
     server_socket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
@@ -63,10 +70,8 @@ def main():
 
     # # ignore the padding for init pkt
     # server_socket.recv(PKT_SERVER_SIZE - count)
-
-
-    init = server_socket.recv(PKT_SERVER_SIZE).decode()
-    size, padding, _ = init.split("_")
+    
+    size, padding = receive_init(server_socket)
 
     no_of_packets = (size // PKT_SERVER_SIZE) + (size % PKT_SERVER_SIZE > 0)
 
