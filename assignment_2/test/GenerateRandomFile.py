@@ -10,8 +10,8 @@ seed = int(sys.argv[1])
 random.seed(seed)
 
 # the size of random files being created in MB
-size_small = 128
-size_large = 512
+size_small = 8
+size_large = 16
 
 # crate the data directory
 dir_name = os.path.join('test', 'output')

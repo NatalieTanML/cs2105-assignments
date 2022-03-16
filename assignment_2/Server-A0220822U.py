@@ -8,12 +8,13 @@ import hashlib
 from socket import *
 
 # constants
-PORT_RELIABLE = 4445
-PORT_ERROR = 4446
-PORT_REORDERING = 4447
+MODE_RELIABLE = 0
+MODE_ERROR = 1
+MODE_REORDERING = 2
 
 PKT_SERVER_SIZE = 1024
 PKT_CLIENT_SIZE = 64
+SEQ_CHECK_BYTES = 4
 
 # input args
 ARG_STUDENT_KEY = sys.argv[1]       # 427167
@@ -25,12 +26,20 @@ ARG_INPUT_FILE_NAME = sys.argv[5]
 METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_S"
 encoded_handshake = METHOD_HANDSHAKE.encode()
 
-def read_chunks(file, size=PKT_SERVER_SIZE):
+def val_to_bytes(val):
+    return val.to_bytes(SEQ_CHECK_BYTES, 'big')
+
+def bytes_to_int(val):
+    return int.from_bytes(val, 'big')
+
+def read_chunks(file, size):
+    seq_num = 0
     while True:
         data = file.read(size)
         if not data:
             break
-        yield data
+        yield data, seq_num
+        seq_num += 1
 
 def pad_packet(data):
     pkt_len = len(data)
@@ -41,10 +50,14 @@ def pad_packet(data):
         data += "\0" * remainder
     return data
 
-def create_packet(data):
+def create_packet(data, seq_num):
     # add seq and chksum
+    if ARG_MODE == 2:
+        data = val_to_bytes(seq_num) + data
+
     if len(data) != PKT_SERVER_SIZE:
         data = pad_packet(data)
+
     if type(data) is bytes:
         return data
     else:
@@ -55,7 +68,7 @@ def init_packet():
     size = os.path.getsize(ARG_INPUT_FILE_NAME)
     padding_size = -size % PKT_SERVER_SIZE
     payload = str(size) + '_' + str(padding_size) + '_'
-    packet = create_packet(payload)
+    packet = create_packet(payload, 0)
     return packet
 
 def handshake():
@@ -77,19 +90,21 @@ def main():
     client_socket = handshake()
 
     # connected
-    start = time.time()
-    client_socket.sendall(init)
+    client_socket.send(init)
 
     # start sending file in chunks of 1024 B (pipelined)
-    for chunk in read_chunks(f):
-        packet = create_packet(chunk)
-        client_socket.sendall(packet)
+    if ARG_MODE == MODE_RELIABLE:
+        for chunk, _ in read_chunks(f, PKT_SERVER_SIZE):
+            packet = create_packet(chunk, _)
+            client_socket.send(packet)
+    elif ARG_MODE == MODE_REORDERING:
+        for chunk, seq_num in read_chunks(f, PKT_SERVER_SIZE - SEQ_CHECK_BYTES):
+            packet = create_packet(chunk, seq_num)
+
 
     client_socket.close()
     f.close()
-    
-    end = time.time()
-    print(end - start)
+
 
 if __name__ == "__main__":
     main()

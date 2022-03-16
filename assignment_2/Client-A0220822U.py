@@ -48,6 +48,8 @@ def handshake():
 def main():
     f = open(ARG_DEST_FILE_NAME, "wb")
     server_socket = handshake()
+    
+    start = time.time()
 
     # connected
     count = 0
@@ -67,6 +69,9 @@ def main():
 
     server_socket.close()
     f.close()
+
+    end = time.time()
+    print(end - start)
 
 
 if __name__ == "__main__":
