@@ -3,7 +3,6 @@
 
 import sys
 import os
-import time
 import hashlib
 from socket import *
 
@@ -15,6 +14,10 @@ MODE_REORDERING = 2
 PKT_SERVER_SIZE = 1024
 PKT_CLIENT_SIZE = 64
 SEQ_CHECK_BYTES = 4
+
+WINDOW = 4
+
+packets = {}
 
 # input args
 ARG_STUDENT_KEY = sys.argv[1]       # 427167
@@ -32,8 +35,19 @@ def val_to_bytes(val):
 def bytes_to_int(val):
     return int.from_bytes(val, 'big')
 
+def split_ack_chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i+n]
+
+def recv_acks(packet):
+    acks = split_ack_chunks(packet, SEQ_CHECK_BYTES)
+    for ack in acks:
+        seq_num_b = ack[0:4]
+        seq_num = bytes_to_int(seq_num_b)
+        packets.pop(seq_num, None)
+
 def read_chunks(file, size):
-    seq_num = 0
+    seq_num = 1
     while True:
         data = file.read(size)
         if not data:
@@ -52,7 +66,7 @@ def pad_packet(data):
 
 def create_packet(data, seq_num):
     # add seq and chksum
-    if ARG_MODE == 2:
+    if ARG_MODE == MODE_REORDERING and seq_num > 0:
         data = val_to_bytes(seq_num) + data
 
     if len(data) != PKT_SERVER_SIZE:
@@ -68,7 +82,7 @@ def init_packet():
     size = os.path.getsize(ARG_INPUT_FILE_NAME)
     padding_size = -size % PKT_SERVER_SIZE
     payload = str(size) + '_' + str(padding_size) + '_'
-    packet = create_packet(payload, 0)
+    packet = create_packet(payload, -1)
     return packet
 
 def handshake():
@@ -98,8 +112,18 @@ def main():
             packet = create_packet(chunk, _)
             client_socket.send(packet)
     elif ARG_MODE == MODE_REORDERING:
+        count = 0
         for chunk, seq_num in read_chunks(f, PKT_SERVER_SIZE - SEQ_CHECK_BYTES):
             packet = create_packet(chunk, seq_num)
+            packets[seq_num] = packet
+            client_socket.send(packet)
+            count += 1
+            if count % WINDOW == 0:
+                count = 0
+                recv_acks(client_socket.recv(PKT_CLIENT_SIZE))
+                if len(packets) > 0:
+                    for pkt in packets.values():
+                        client_socket.send(pkt)
 
 
     client_socket.close()
