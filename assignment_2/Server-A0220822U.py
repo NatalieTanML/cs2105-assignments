@@ -1,5 +1,5 @@
-# bash test/FileTransfer.sh -i 427167 -n & bash test/FileTransfer.sh -s -i 427167 -n
-# python3 Server-A0220822U.py 427167 0 137.132.92.111 4445 ./test/input/613_large.dat
+# bash test/FileTransfer.sh -i 427167 -r & bash test/FileTransfer.sh -s -i 427167 -r
+# python3 Server-A0220822U.py 427167 2 137.132.92.111 4447 ./test/input/test.dat
 
 import sys
 import os
@@ -80,7 +80,12 @@ def create_packet(data, seq_num):
 def init_packet():
     # create first packet containing file size, and last packet padding len
     size = os.path.getsize(ARG_INPUT_FILE_NAME)
-    padding_size = -size % PKT_SERVER_SIZE
+    remainder = PKT_SERVER_SIZE
+    if ARG_MODE == MODE_REORDERING:
+        remainder -= SEQ_CHECK_BYTES
+    elif ARG_MODE == MODE_ERROR:
+        remainder -= SEQ_CHECK_BYTES * 2
+    padding_size = -size % remainder
     payload = str(size) + '_' + str(padding_size) + '_'
     packet = create_packet(payload, -1)
     return packet
@@ -112,18 +117,11 @@ def main():
             packet = create_packet(chunk, _)
             client_socket.send(packet)
     elif ARG_MODE == MODE_REORDERING:
-        count = 0
         for chunk, seq_num in read_chunks(f, PKT_SERVER_SIZE - SEQ_CHECK_BYTES):
             packet = create_packet(chunk, seq_num)
-            packets[seq_num] = packet
             client_socket.send(packet)
-            count += 1
-            if count % WINDOW == 0:
-                count = 0
-                recv_acks(client_socket.recv(PKT_CLIENT_SIZE))
-                if len(packets) > 0:
-                    for pkt in packets.values():
-                        client_socket.send(pkt)
+            ack = client_socket.recv(PKT_CLIENT_SIZE)
+            
 
 
     client_socket.close()

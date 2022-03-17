@@ -1,4 +1,4 @@
-# python3 Client-A0220822U.py 427167 0 137.132.92.111 4445 ./test/output/613_large.dat
+# python3 Client-A0220822U.py 427167 2 137.132.92.111 4447 ./test/output/test.dat
 
 import sys
 import time
@@ -67,7 +67,12 @@ def check_buffer(f):
         break
 
 def count_total_packets(size):
-    return (size // PKT_SERVER_SIZE) + (size % PKT_SERVER_SIZE > 0)
+    header = 0
+    if ARG_MODE == MODE_REORDERING:
+        header = SEQ_CHECK_BYTES
+    elif ARG_MODE == MODE_ERROR:
+        header = 2 * SEQ_CHECK_BYTES
+    return (size // (PKT_SERVER_SIZE - header)) + (size % (PKT_SERVER_SIZE - header) > 0)
 
 def recvall(server_socket, size):
     data = bytearray()
@@ -128,19 +133,24 @@ def main():
 
         elif ARG_MODE == MODE_REORDERING:
             seq_num, data = split_packet(packet)
-            if seq_num == expected_seq_num:
-                f.write(data)
-                expected_seq_num += 1
-                update_ack_packet(seq_num)
-                check_buffer(f)
-            else:
-                buffer[seq_num] = data
-                update_ack_packet(seq_num)
+            f.write(data)
+            ack = pad_packet(str(seq_num) + '_')
+            server_socket.send(ack.encode())
 
-            if len(buffer) == PKT_CLIENT_SIZE or count % WINDOW == 0:
-                pkt = pad_packet(ack_packet)
-                server_socket.send(pkt)
-                ack_packet = b''
+            # seq_num, data = split_packet(packet)
+            # if seq_num == expected_seq_num:
+            #     f.write(data)
+            #     expected_seq_num += 1
+            #     update_ack_packet(seq_num)
+            #     check_buffer(f)
+            # else:
+            #     buffer[seq_num] = data
+            #     update_ack_packet(seq_num)
+
+            # if len(buffer) == PKT_CLIENT_SIZE or count % WINDOW == 0:
+            #     pkt = pad_packet(ack_packet)
+            #     server_socket.send(pkt)
+            #     ack_packet = b''
 
 
     server_socket.close()
