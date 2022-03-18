@@ -14,9 +14,6 @@ PKT_SERVER_SIZE = 1024
 PKT_CLIENT_SIZE = 64
 SEQ_CHECK_BYTES = 4
 
-buffer = {}
-count = 0
-
 # input args
 ARG_STUDENT_KEY = sys.argv[1]       # 427167
 ARG_MODE = int(sys.argv[2])         # 0, 1, or 2
@@ -26,6 +23,9 @@ ARG_DEST_FILE_NAME = sys.argv[5]
 
 METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_C"
 encoded_handshake = METHOD_HANDSHAKE.encode()
+
+buffer = {}
+count = 0
 
 
 def val_to_bytes(val):
@@ -47,17 +47,16 @@ def split_packet(packet):
     if ARG_MODE == MODE_REORDERING:
         seq_num_b = packet[0:4]
         data = packet[4:]
-        print("client: ", seq_num_b, data)
     elif ARG_MODE == MODE_ERROR:
         checksum_b = packet[0:4]
         seq_num_b = packet[4:8]
         data = packet[8:]
-        print("client: ", checksum_b, seq_num_b, data)
-        if calc_checksum(seq_num_b + data) != checksum_b:
-            return None, None, None # corrupted
         
     seq_num = bytes_to_int(seq_num_b)
-    return seq_num, data, seq_num_b
+    return seq_num, data, checksum_b, seq_num_b
+
+def is_corrupted(checksum_b, seq_num_b, data):
+    return calc_checksum(seq_num_b + data) != checksum_b
 
 def count_total_packets(size):
     header = 0
@@ -86,14 +85,11 @@ def receive_init(server_socket):
 def handshake():
     server_socket = socket(AF_INET, SOCK_STREAM)
     server_socket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
-
     # handshake
     server_socket.send(encoded_handshake)
     handshake = server_socket.recv(4)
-
     while handshake != b'0_':
         handshake = server_socket.recv(4)
-
     return server_socket
 
 def main():
@@ -122,7 +118,7 @@ def main():
     elif ARG_MODE == MODE_REORDERING:
         while len(buffer) < total_packets:
             packet = recvall(server_socket, PKT_SERVER_SIZE)
-            seq_num, data, _ = split_packet(packet)
+            seq_num, data, _, _ = split_packet(packet)
             if seq_num == total_packets-1 and padding > 0:
                 data = data[:-padding]
             buffer[seq_num] = data
@@ -130,22 +126,24 @@ def main():
         for k in sorted(buffer):
             f.write(buffer[k])
 
-    else:
+    elif ARG_MODE == MODE_ERROR:
         while len(buffer) < total_packets:
             packet = recvall(server_socket, PKT_SERVER_SIZE)
-            seq_num, data, _ = split_packet(packet)
-            if seq_num is None:
-                # print("corrupted")
-                continue
+            seq_num, data, checksum_b, seq_num_b = split_packet(packet)
             if seq_num == total_packets-1 and padding > 0:
                 data = data[:-padding]
+            
+            if is_corrupted(checksum_b, seq_num_b, data):
+                continue
             buffer[seq_num] = data
 
-        server_socket.close()
+        completed = pad_packet(b'completed')
+        server_socket.send(completed)
 
         for k in sorted(buffer):
             f.write(buffer[k])
 
+    server_socket.close()
     f.close()
 
     end = time.time()

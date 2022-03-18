@@ -1,9 +1,9 @@
-# bash test/FileTransfer.sh -i 427167 -r & bash test/FileTransfer.sh -s -i 427167 -r
+# bash test/FileTransfer.sh -i 427167 -e & bash test/FileTransfer.sh -s -i 427167 -e
 # python3 Server-A0220822U.py 427167 1 137.132.92.111 4446 ./test/input/small.dat
 
 import sys
 import os
-import errno
+import time
 import zlib
 from socket import *
 
@@ -16,10 +16,6 @@ PKT_SERVER_SIZE = 1024
 PKT_CLIENT_SIZE = 64
 SEQ_CHECK_BYTES = 4
 
-WINDOW = 16
-
-packets = {}
-
 # input args
 ARG_STUDENT_KEY = sys.argv[1]       # 427167
 ARG_MODE = int(sys.argv[2])         # 0, 1, or 2
@@ -30,6 +26,8 @@ ARG_INPUT_FILE_NAME = sys.argv[5]
 METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_S"
 encoded_handshake = METHOD_HANDSHAKE.encode()
 
+packets = {}
+
 
 def val_to_bytes(val):
     return val.to_bytes(SEQ_CHECK_BYTES, 'big')
@@ -39,26 +37,6 @@ def bytes_to_int(val):
 
 def calc_checksum(data):
     return val_to_bytes(zlib.crc32(data))
-
-def conn_closed(socket):
-    try:
-        buf = socket.recv(1, MSG_PEEK | MSG_DONTWAIT)
-        if buf == b'':
-            print(socket.fileno())
-            return True
-    except BlockingIOError as exc:
-        if exc.errno != errno.EAGAIN:
-            raise
-    return False
-
-# def recvall(server_socket, size):
-#     data = bytearray()
-#     while len(data) < size:
-#         part = server_socket.recv(size - len(data))
-#         if not part:
-#             return None
-#         data.extend(part)
-#     return data
 
 def read_chunks(file, size):
     seq_num = 0
@@ -103,14 +81,11 @@ def init_packet():
 def handshake():
     client_socket = socket(AF_INET, SOCK_STREAM)
     client_socket.connect((ARG_IP_ADDR, ARG_PORT_NUM))
-
     # handshake
     client_socket.send(encoded_handshake)
     handshake = client_socket.recv(4)
-
     while handshake != b'0_':
         handshake = client_socket.recv(4)
-
     return client_socket
 
 def main():
@@ -130,16 +105,28 @@ def main():
         for chunk, seq_num in read_chunks(f, PKT_SERVER_SIZE - SEQ_CHECK_BYTES):
             packet = create_packet(chunk, seq_num)
             client_socket.send(packet)
-    else:
-        print(client_socket.fileno())
+    elif ARG_MODE == MODE_ERROR:
         for chunk, seq_num in read_chunks(f, PKT_SERVER_SIZE - (SEQ_CHECK_BYTES + SEQ_CHECK_BYTES)):
             packet = create_packet(chunk, seq_num)
-            # print("server: ", packet)
             packets[seq_num] = packet
             client_socket.send(packet)
-        while not conn_closed(client_socket):
-            for pkt in packets.values():
-                client_socket.send(pkt)
+        while True:
+            time.sleep(0.1)
+            try:
+                ack = client_socket.recv(PKT_CLIENT_SIZE, MSG_DONTWAIT)
+                # print(ack)
+                if len(ack) > 0:
+                    break
+            except BlockingIOError:
+                pass
+            except BrokenPipeError:
+                break
+
+            try:
+                for pkt in packets.values():
+                    client_socket.send(pkt)
+            except:
+                break
 
     client_socket.close()
     f.close()
