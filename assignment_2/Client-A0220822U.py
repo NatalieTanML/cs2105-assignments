@@ -1,7 +1,6 @@
 # python3 Client-A0220822U.py 427167 1 137.132.92.111 4446 ./test/output/small.dat
 
 import sys
-import time
 import zlib
 from socket import *
 
@@ -102,8 +101,6 @@ def main():
     f = open(ARG_DEST_FILE_NAME, "wb")
     server_socket = handshake()
     
-    start = time.time()
-
     # connected
     size, padding = receive_init(server_socket)
     total_packets = count_total_packets(size)
@@ -149,9 +146,6 @@ def main():
 
     server_socket.close()
     f.close()
-
-    end = time.time()
-    print(end - start)
 
 
 if __name__ == "__main__":
