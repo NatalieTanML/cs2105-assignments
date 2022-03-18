@@ -1,4 +1,4 @@
-# bash test/FileTransfer.sh -i 427167 -e & bash test/FileTransfer.sh -s -i 427167 -e
+# bash test/FileTransfer.sh -i 427167 -A & bash test/FileTransfer.sh -s -i 427167 -A
 # python3 Server-A0220822U.py 427167 1 137.132.92.111 4446 ./test/input/small.dat
 
 import sys

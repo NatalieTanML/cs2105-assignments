@@ -53,7 +53,11 @@ def split_packet(packet):
         data = packet[8:]
         
     seq_num = bytes_to_int(seq_num_b)
-    return seq_num, data, checksum_b, seq_num_b
+
+    if ARG_MODE == MODE_REORDERING:
+        return seq_num, data
+    else:
+        return seq_num, data, checksum_b, seq_num_b
 
 def is_corrupted(checksum_b, seq_num_b, data):
     return calc_checksum(seq_num_b + data) != checksum_b
@@ -118,7 +122,7 @@ def main():
     elif ARG_MODE == MODE_REORDERING:
         while len(buffer) < total_packets:
             packet = recvall(server_socket, PKT_SERVER_SIZE)
-            seq_num, data, _, _ = split_packet(packet)
+            seq_num, data = split_packet(packet)
             if seq_num == total_packets-1 and padding > 0:
                 data = data[:-padding]
             buffer[seq_num] = data
