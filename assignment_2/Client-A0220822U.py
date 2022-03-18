@@ -1,8 +1,8 @@
-# python3 Client-A0220822U.py 427167 2 137.132.92.111 4447 ./test/output/test.dat
+# python3 Client-A0220822U.py 427167 2 137.132.92.111 4447 ./test/output/small.dat
 
 import sys
 import time
-import hashlib
+import zlib
 from socket import *
 
 # constants
@@ -14,11 +14,11 @@ PKT_SERVER_SIZE = 1024
 PKT_CLIENT_SIZE = 64
 SEQ_CHECK_BYTES = 4
 
-WINDOW = 4
+WINDOW = 16
 
 buffer = {}
 ack_packet = b''
-expected_seq_num = 1
+expected_seq_num = 0
 count = 0
 
 # input args
@@ -37,6 +37,9 @@ def val_to_bytes(val):
 def bytes_to_int(val):
     return int.from_bytes(val, 'big')
 
+def calc_checksum(data):
+    return val_to_bytes(zlib.crc32(data))
+
 def pad_packet(data):
     pkt_len = len(data)
     remainder = -pkt_len % PKT_CLIENT_SIZE
@@ -48,12 +51,20 @@ def pad_packet(data):
 
 def update_ack_packet(seq_num):
     global ack_packet
-    ack_packet += val_to_bytes(seq_num)
+    ack_packet += val_to_bytes(seq_num) + calc_checksum(seq_num)
     return ack_packet
 
 def split_packet(packet):
-    seq_num_b = packet[0:4]
-    data = packet[4:]
+    if ARG_MODE == MODE_REORDERING:
+        seq_num_b = packet[0:4]
+        data = packet[4:]
+    else:
+        checksum_b = packet[0:4]
+        seq_num_b = packet[4:8]
+        data = packet[8:]
+        if calc_checksum(seq_num_b + data) != checksum_b:
+            return # corrupted
+        
     seq_num = bytes_to_int(seq_num_b)
     return seq_num, data
 
@@ -117,37 +128,71 @@ def main():
     size, padding = receive_init(server_socket)
     total_packets = count_total_packets(size)
 
-    while True:
-        packet = recvall(server_socket, PKT_SERVER_SIZE)
-        count += 1
-
-        if not packet:
-            break
-
-        if count == total_packets and padding > 0:
-            # last packet
-            packet = packet[:-padding]
-
-        if ARG_MODE == MODE_RELIABLE:
+    if ARG_MODE == MODE_RELIABLE:
+        while True:
+            packet = recvall(server_socket, PKT_SERVER_SIZE)
+            count += 1
+            if not packet:
+                break
+            if count == total_packets and padding > 0:
+                # last packet
+                packet = packet[:-padding]
             f.write(packet)
 
-        elif ARG_MODE == MODE_REORDERING:
+    elif ARG_MODE == MODE_REORDERING:
+        while len(buffer) < total_packets:
+            packet = recvall(server_socket, PKT_SERVER_SIZE)
             seq_num, data = split_packet(packet)
-            f.write(data)
-            ack = pad_packet(str(seq_num) + '_')
-            server_socket.send(ack.encode())
+            if seq_num == total_packets-1 and padding > 0:
+                data = data[:-padding]
+            buffer[seq_num] = data
+
+        for k in sorted(buffer):
+            f.write(buffer[k])
+
+    else:
+        while len(buffer) < total_packets:
+            packet = recvall(server_socket, PKT_SERVER_SIZE)
+            seq_num, data = split_packet(packet)
+            if not seq_num or not data:
+                continue
+            if seq_num == total_packets-1 and padding > 0:
+                data = data[:-padding]
+            buffer[seq_num] = data
+
+            # add to ack
+            update_ack_packet(seq_num)
+            if len(ack_packet) == PKT_CLIENT_SIZE:
+                server_socket.send(ack_packet)
+
+        for k in sorted(buffer):
+            f.write(buffer[k])
+
+            # offset = seq_num * len(data)
+            # print(seq_num, orig, offset)
+            # f.seek(offset)
+            # f.write(data)
+
+            # f.write(data)
+            # ack = pad_packet(str(seq_num) + '_')
+            # server_socket.send(ack.encode())
 
             # seq_num, data = split_packet(packet)
             # if seq_num == expected_seq_num:
             #     f.write(data)
             #     expected_seq_num += 1
-            #     update_ack_packet(seq_num)
-            #     check_buffer(f)
+            #     # update_ack_packet(seq_num)
+            #     # check_buffer(f)
             # else:
+            #     orig = f.tell()
+            #     offset = (seq_num - 1) * (PKT_SERVER_SIZE - SEQ_CHECK_BYTES)
+            #     f.seek(offset)
+            #     f.write(data)
+            #     f.seek(orig)
             #     buffer[seq_num] = data
             #     update_ack_packet(seq_num)
 
-            # if len(buffer) == PKT_CLIENT_SIZE or count % WINDOW == 0:
+            # if len(ack_packet) == PKT_CLIENT_SIZE or count % WINDOW == 0 or count == total_packets:
             #     pkt = pad_packet(ack_packet)
             #     server_socket.send(pkt)
             #     ack_packet = b''

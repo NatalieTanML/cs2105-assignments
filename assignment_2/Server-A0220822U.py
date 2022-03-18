@@ -1,9 +1,9 @@
 # bash test/FileTransfer.sh -i 427167 -r & bash test/FileTransfer.sh -s -i 427167 -r
-# python3 Server-A0220822U.py 427167 2 137.132.92.111 4447 ./test/input/test.dat
+# python3 Server-A0220822U.py 427167 2 137.132.92.111 4447 ./test/input/small.dat
 
 import sys
 import os
-import hashlib
+import zlib
 from socket import *
 
 # constants
@@ -15,7 +15,7 @@ PKT_SERVER_SIZE = 1024
 PKT_CLIENT_SIZE = 64
 SEQ_CHECK_BYTES = 4
 
-WINDOW = 4
+WINDOW = 16
 
 packets = {}
 
@@ -29,25 +29,46 @@ ARG_INPUT_FILE_NAME = sys.argv[5]
 METHOD_HANDSHAKE = "STID_" + ARG_STUDENT_KEY + "_S"
 encoded_handshake = METHOD_HANDSHAKE.encode()
 
+
 def val_to_bytes(val):
     return val.to_bytes(SEQ_CHECK_BYTES, 'big')
 
 def bytes_to_int(val):
     return int.from_bytes(val, 'big')
 
+def calc_checksum(data):
+    return val_to_bytes(zlib.crc32(data))
+
+def recvall(server_socket, size):
+    data = bytearray()
+    while len(data) < size:
+        part = server_socket.recv(size - len(data))
+        if not part:
+            return None
+        data.extend(part)
+    return data
+
 def split_ack_chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i+n]
 
-def recv_acks(packet):
-    acks = split_ack_chunks(packet, SEQ_CHECK_BYTES)
+def recv_acks(client_socket):
+    packet = recvall(client_socket, PKT_CLIENT_SIZE)
+    if not packet or len(packets) <= 0:
+        return
+
+    acks = split_ack_chunks(packet, SEQ_CHECK_BYTES * 2)
     for ack in acks:
-        seq_num_b = ack[0:4]
+        checksum_b = ack[0:4]
+        seq_num_b = ack[4:8]
+        if calc_checksum(seq_num_b) != checksum_b:
+            continue # corrupted packet, continue
+
         seq_num = bytes_to_int(seq_num_b)
         packets.pop(seq_num, None)
 
 def read_chunks(file, size):
-    seq_num = 1
+    seq_num = 0
     while True:
         data = file.read(size)
         if not data:
@@ -65,17 +86,18 @@ def pad_packet(data):
     return data
 
 def create_packet(data, seq_num):
-    # add seq and chksum
-    if ARG_MODE == MODE_REORDERING and seq_num > 0:
+    # add seq
+    if ARG_MODE > MODE_RELIABLE and seq_num >= 0:
         data = val_to_bytes(seq_num) + data
+    # add checksum
+    if ARG_MODE == MODE_ERROR and seq_num >= 0:
+        checksum = calc_checksum(data)
+        data = checksum + data
 
     if len(data) != PKT_SERVER_SIZE:
         data = pad_packet(data)
 
-    if type(data) is bytes:
-        return data
-    else:
-        return data.encode()
+    return data if type(data) is bytes else data.encode()
 
 def init_packet():
     # create first packet containing file size, and last packet padding len
@@ -120,9 +142,14 @@ def main():
         for chunk, seq_num in read_chunks(f, PKT_SERVER_SIZE - SEQ_CHECK_BYTES):
             packet = create_packet(chunk, seq_num)
             client_socket.send(packet)
-            ack = client_socket.recv(PKT_CLIENT_SIZE)
-            
-
+    else:
+        for chunk, seq_num in read_chunks(f, PKT_SERVER_SIZE - (2 * SEQ_CHECK_BYTES)):
+            packet = create_packet(chunk, seq_num)
+            packets[seq_num] = packet
+        while len(packets) > 0:
+            recv_acks(client_socket)
+            for pkt in packets.values():
+                client_socket.send(pkt)
 
     client_socket.close()
     f.close()
