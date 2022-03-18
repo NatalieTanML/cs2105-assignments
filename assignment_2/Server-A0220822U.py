@@ -114,7 +114,6 @@ def main():
             time.sleep(0.1)
             try:
                 ack = client_socket.recv(PKT_CLIENT_SIZE, MSG_DONTWAIT)
-                # print(ack)
                 if len(ack) > 0:
                     break
             except BlockingIOError:
